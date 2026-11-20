@@ -10,10 +10,9 @@ BI Desktop after export.
 
 from __future__ import annotations
 
+import io
 import logging
-import os
 import re
-import tempfile
 
 log = logging.getLogger(__name__)
 
@@ -31,17 +30,10 @@ class Model:
         try:
             from pbixray import PBIXRay
 
-            # PBIXRay needs a path; use a private temp file removed right away
-            # after parsing (the model is then held in memory only).
-            fd, path = tempfile.mkstemp(suffix=".pbix")
-            try:
-                with os.fdopen(fd, "wb") as fh:
-                    fh.write(data)
-                self._ray = PBIXRay(path)
-                self._build_schema()
-                self._load_frames()
-            finally:
-                os.unlink(path)
+            # Parse from memory: no temp file on disk (privacy, and on Windows
+            # an open temp file cannot be deleted).
+            self._ray = PBIXRay(io.BytesIO(data))
+            self._build_schema()
         except Exception as exc:  # model unreadable (DirectQuery, live, etc.)
             log.warning("model read failed: %s", exc)
             self.error = f"Could not read the data model: {exc}"
@@ -72,13 +64,43 @@ class Model:
             tables.append({"name": str(t), "columns": columns, "measures": measures})
         self.schema = {"tables": tables}
 
-    def _load_frames(self) -> None:
-        for t in self.schema["tables"]:
+    def _frame(self, table: str):
+        """Load a table on first use (first MAX_ROWS rows only)."""
+        if table in self._frames:
+            return self._frames[table]
+        df = None
+        if self._ray is not None and any(t["name"] == table for t in self.schema["tables"]):
             try:
-                df = self._ray.get_table(t["name"])
-                self._frames[t["name"]] = df.head(MAX_ROWS)
+                chunks, n = [], 0
+                for chunk in self._ray.iter_table(table, chunk_size=50_000, strings_as_categorical=False):
+                    chunks.append(chunk)
+                    n += len(chunk)
+                    if n >= MAX_ROWS:
+                        break
+                if chunks:
+                    import pandas as pd
+
+                    df = pd.concat(chunks).head(MAX_ROWS)
             except Exception as exc:
-                log.info("table %s not loaded: %s", t["name"], exc)
+                log.info("table %s not loaded: %s", table, exc)
+        self._frames[table] = df
+        return df
+
+    def _frames_for(self, fields: list[dict]) -> dict:
+        """Frames of every table the fields (and their measures) refer to."""
+        names = {f.get("table") for f in fields if f.get("table")}
+        exprs = [self._measures.get(f["name"], "") for f in fields if f.get("kind") == "measure"]
+        seen = set()
+        while exprs:  # follow [Measure] references to find their tables
+            e = exprs.pop()
+            for t in self.schema["tables"]:
+                if re.search(r"'?" + re.escape(t["name"]) + r"'?\s*[\[\)]", e):
+                    names.add(t["name"])
+            for ref in re.findall(r"\[([^\]]+)\]", e):
+                if ref in self._measures and ref not in seen:
+                    seen.add(ref)
+                    exprs.append(self._measures[ref])
+        return {n: df for n in names if (df := self._frame(n)) is not None}
 
     # ------------------------------------------------------------------
     # Preview evaluation
@@ -164,8 +186,9 @@ class Model:
     def preview(self, fields: list[dict]) -> dict | None:
         """Return ``{"categories": [...], "series": [{"name", "values"}]}``
         (or ``{"value": x}`` / ``{"columns", "rows"}``) for a visual."""
-        if not self._frames or not fields:
+        if self._ray is None or not fields:
             return None
+        frames = self._frames_for(fields)
         cat_roles = {"Category", "Rows", "Axis", "Legend"}
         cats = [f for f in fields if f["role"] in cat_roles and f["kind"] == "column"]
         vals = [f for f in fields if f not in cats and f["kind"] in ("measure", "aggregation")]
@@ -174,7 +197,7 @@ class Model:
         if not cats and not vals and plain_cols:
             # table / slicer: show raw rows of the columns' table
             t = plain_cols[0]["table"]
-            df = self._frames.get(t)
+            df = frames.get(t)
             if df is None:
                 return None
             names = [f["name"] for f in plain_cols if f["table"] == t and f["name"] in df]
@@ -185,7 +208,7 @@ class Model:
 
         if cats:
             c = cats[0]
-            base = self._frames.get(c["table"])
+            base = frames.get(c["table"])
             if base is None or c["name"] not in base:
                 return None
             categories = base[c["name"]].dropna().unique().tolist()
@@ -198,7 +221,7 @@ class Model:
             for v in vals:
                 values = []
                 for cat in categories:
-                    filtered = dict(self._frames)
+                    filtered = dict(frames)
                     filtered[c["table"]] = base[base[c["name"]] == cat]
                     values.append(self._value(v, filtered))
                 series.append({"name": v["name"], "values": _jsonable(values)})
@@ -209,7 +232,7 @@ class Model:
             return {"categories": _jsonable(categories), "series": series}
 
         if vals:
-            value = self._value(vals[0], dict(self._frames))
+            value = self._value(vals[0], dict(frames))
             return None if value is None else {"value": _jsonable([value])[0], "name": vals[0]["name"]}
         return None
 

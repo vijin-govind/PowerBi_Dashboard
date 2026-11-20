@@ -44,16 +44,50 @@ Uploaded files are held **in memory only**, for at most one hour per session.
 
 ## Run it
 
-Requires Python 3.10+.
+You need **Python 3.10 or newer**.
 
-```bash
-cd backend
-python -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --port 8000
+### Windows (easiest)
+
+1. Install Python from https://www.python.org/downloads/windows/ and tick
+   **"Add python.exe to PATH"** in the installer.
+2. Download this repository (Code → Download ZIP) and unzip it.
+3. Double-click **`run.bat`**.
+
+The first run creates a `.venv` folder and installs the packages, which takes
+about a minute. Your browser then opens PBIX Canvas. Keep the black window open
+while you use the app, and close it to stop.
+
+<details><summary>Manual Windows setup (PowerShell)</summary>
+
+Run these from the repository folder (the one that contains `run.py`), one
+line at a time:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+.\.venv\Scripts\python.exe run.py
 ```
 
-Then open http://localhost:8000.
+This calls the venv's Python directly, so you don't need `Activate.ps1` or
+any change to PowerShell's execution policy.
+</details>
+
+### macOS / Linux
+
+```bash
+./run.sh
+```
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `'python' is not recognized` / the Microsoft Store opens | Install Python from python.org with "Add to PATH" ticked, or use `py -3` |
+| `Activate.ps1 cannot be loaded … running scripts is disabled` | Not needed. Use `run.bat` or the manual commands above |
+| `ModuleNotFoundError: No module named 'app'` | Start with `run.py` from the repository folder, not `uvicorn` from another folder |
+| `pip install` fails behind a company network | Set `HTTPS_PROXY`, or ask IT to allow `pypi.org` and `files.pythonhosted.org` |
+| Port 8000 already in use | `run.py` automatically picks the next free port (8001, 8002, …) |
+| Blank page | Press Ctrl+F5. If it's still blank, send the text in the black window |
 
 ## Tests
 

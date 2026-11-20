@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import mimetypes
 import re
 import threading
 import time
@@ -18,6 +19,10 @@ from . import layout_legacy, layout_pbir
 from .model_info import Model
 from .pbix_io import PbixError, PbixPackage, open_pbix, write_pbix
 
+# Some Windows registries map .js to text/plain, which breaks the page.
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
+
 MAX_UPLOAD = 500 * 1024 * 1024
 SESSION_TTL = 60 * 60  # uploaded files live in memory only, for one hour
 
@@ -33,6 +38,7 @@ class Session:
     model: Model
     doc: dict
     touched: float = field(default_factory=time.time)
+    lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 _sessions: dict[str, Session] = {}
@@ -98,7 +104,8 @@ async def upload(file: UploadFile = File(...)):
 def preview(sid: str, body: PreviewBody):
     s = _get(sid)
     try:
-        return {"data": s.model.preview(body.fields)}
+        with s.lock:  # PBIXRay is not guaranteed thread-safe
+            return {"data": s.model.preview(body.fields)}
     except Exception as exc:  # preview is best-effort
         return {"data": None, "error": str(exc)}
 

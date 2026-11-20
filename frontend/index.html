@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PBIX Canvas</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">▦</span> PBIX Canvas</div>
+    <label class="btn" title="Open a .pbix file">
+      <input id="fileInput" type="file" accept=".pbix" hidden />Open .pbix
+    </label>
+    <div id="fileInfo" class="file-info"></div>
+    <div class="spacer"></div>
+    <button id="undoBtn" class="btn icon" title="Undo (Ctrl+Z)" disabled>↶</button>
+    <button id="redoBtn" class="btn icon" title="Redo (Ctrl+Shift+Z)" disabled>↷</button>
+    <div class="zoom">
+      <button id="zoomOut" class="btn icon" title="Zoom out">−</button>
+      <button id="zoomFit" class="btn" title="Fit to screen"><span id="zoomLabel">100%</span></button>
+      <button id="zoomIn" class="btn icon" title="Zoom in">+</button>
+    </div>
+    <label class="toggle" title="Snap to 8px grid"><input id="snapToggle" type="checkbox" checked /> Snap</label>
+    <button id="exportBtn" class="btn primary" disabled>Export .pbix</button>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar left">
+      <section>
+        <div class="section-head">Pages <button id="addPage" class="btn tiny" title="Add page" disabled>+</button></div>
+        <ul id="pageList" class="page-list"></ul>
+      </section>
+      <section class="grow">
+        <div class="section-head">Fields</div>
+        <div id="modelNote" class="note"></div>
+        <div id="fieldList" class="field-list"></div>
+      </section>
+    </aside>
+
+    <section class="stage-wrap">
+      <div class="toolbar" id="toolbar">
+        <span class="toolbar-label">Insert</span>
+        <button class="tool" data-type="card" disabled>▢ Card</button>
+        <button class="tool" data-type="clusteredColumnChart" disabled>▮ Column</button>
+        <button class="tool" data-type="clusteredBarChart" disabled>▬ Bar</button>
+        <button class="tool" data-type="lineChart" disabled>⟋ Line</button>
+        <button class="tool" data-type="pieChart" disabled>◔ Pie</button>
+        <button class="tool" data-type="tableEx" disabled>▤ Table</button>
+        <button class="tool" data-type="slicer" disabled>☰ Slicer</button>
+        <button class="tool" data-type="textbox" disabled>T Text</button>
+      </div>
+      <div id="stage" class="stage">
+        <div id="dropZone" class="drop-zone">
+          <div class="drop-card">
+            <div class="drop-icon">⬆</div>
+            <h1>Open a Power BI file</h1>
+            <p>Drop a <b>.pbix</b> file here or use <b>Open .pbix</b>.</p>
+            <p class="muted">Your file is processed in memory and deleted after one hour. The data model is never modified. Only the report layout is edited.</p>
+          </div>
+        </div>
+        <div id="pageCanvas" class="page-canvas" hidden></div>
+      </div>
+    </section>
+
+    <aside class="sidebar right" id="props">
+      <div class="section-head">Properties</div>
+      <div id="propsBody" class="props-body"><p class="muted">Open a file to start.</p></div>
+    </aside>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="vendor/echarts.min.js"></script>
+  <script src="vendor/interact.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
